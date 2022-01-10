@@ -30,6 +30,7 @@ mod sazan {
 
 
     pub struct Role(u8);
+    #[derive(PartialEq, Eq)]
     pub struct SlidingRole(u8);
     pub struct PromotingRole(u8);
 
@@ -72,12 +73,18 @@ mod sazan {
     const KNIGHT: Role = Role(5);
     const PAWN: Role = Role(6);
 
+    const SLIDING_KING: SlidingRole = SlidingRole(KING.0);
+    const SLIDING_QUEEN: SlidingRole = SlidingRole(QUEEN.0);
+    const SLIDING_ROOK: SlidingRole = SlidingRole(ROOK.0);
+    const SLIDING_BISHOP: SlidingRole = SlidingRole(BISHOP.0);
+    const SLIDING_KNIGHT: SlidingRole = SlidingRole(KNIGHT.0);
+
     const ALL_SLIDING: [SlidingRole; 5] = [
-        SlidingRole(KING.0),
-        SlidingRole(QUEEN.0),
-        SlidingRole(ROOK.0),
-        SlidingRole(BISHOP.0),
-        SlidingRole(KNIGHT.0)
+    SLIDING_KING,
+    SLIDING_QUEEN,
+    SLIDING_ROOK,
+    SLIDING_BISHOP,
+    SLIDING_KNIGHT,
     ];
 
     impl<A> SlidingRoleMap<A> {
@@ -85,18 +92,18 @@ mod sazan {
         pub fn new<F>(fna: F) -> SlidingRoleMap<A> where F: Fn(SlidingRole) -> A {
             SlidingRoleMap(ALL_SLIDING.map(fna))
         }
-/*
-        pub fn map<F, B>(&self, fna: F) -> SlidingRoleMap<B> where F: Fn(A) -> B {
-            SlidingRoleMap(self.0.iter().map(fna))
+
+
+        pub fn map<F, B>(&self, fna: F) -> SlidingRoleMap<B> where F: Fn(A) -> B, A: Copy {
+
+            SlidingRoleMap(self.0.map(fna))
         }
-*/
+
     }
 
     impl<'a> Ray<'a> {
 
-        pub fn new() -> Vec<Ray<'a>> {
-            let res = Vec::new();
-            res
+        pub fn rays() -> Vector<Ray<'a>> {
         }
     }
 
@@ -162,6 +169,7 @@ mod sazan {
     const DOWN2: Edir = Edir(-2);
     const UP: Edir = Edir(1);
     const DOWN: Edir = Edir(-1);
+    const UP8: Edir = Edir(8);
 
     const KNIGHT_DIRS: [Dir; 8] = [
         Dir(UP2, UP),
@@ -174,19 +182,27 @@ mod sazan {
         Dir(DOWN, DOWN),
     ];
 
-    const BISHOP_DIRS: [Dir; 4] = [
+    const BISHOP_DIRS: [Dir; 8] = [
         Dir(UP, DOWN),
         Dir(UP, UP),
         Dir(DOWN, UP),
         Dir(DOWN, DOWN),
+        Dir(UP8, UP8),
+        Dir(UP8, UP8),
+        Dir(UP8, UP8),
+        Dir(UP8, UP8),
     ];
 
 
-    const ROOK_DIRS: [Dir; 4] = [
+    const ROOK_DIRS: [Dir; 8] = [
         Dir(UP, STILL),
         Dir(DOWN, STILL),
         Dir(STILL, UP),
         Dir(STILL, DOWN),
+        Dir(UP8, UP8),
+        Dir(UP8, UP8),
+        Dir(UP8, UP8),
+        Dir(UP8, UP8),
     ];
 
     const QUEEN_DIRS: [Dir; 8] = [
@@ -202,15 +218,18 @@ mod sazan {
 
     const KING_DIRS: [Dir; 8] = QUEEN_DIRS;
 
-    const DIRS: Lazy<SlidingRoleMap<Vec<Dir>>> = Lazy::new(|| 
+    const DIRS: Lazy<SlidingRoleMap<[Dir; 8]>> = Lazy::new(|| 
         SlidingRoleMap::new(|role| {
-            let res = Vec::new();
-
-            res
+            match role {
+                SLIDING_KING => KING_DIRS,
+                SLIDING_QUEEN => QUEEN_DIRS,
+                SLIDING_ROOK => ROOK_DIRS,
+                SLIDING_BISHOP => BISHOP_DIRS,
+                SLIDING_KNIGHT => KNIGHT_DIRS,
+                _ => KING_DIRS
+            }
         })
     );
-
-    /*
 
     const RAYS: Lazy<SlidingRoleMap<PosMap<Vec<Ray>>>> = Lazy::new(||
         DIRS
@@ -218,14 +237,17 @@ mod sazan {
              PosMap::new(|pos|
                          dirs
                          .iter()
-                         .map(|&dir| dir)
                          .map(|dir|
-                              Ray::new())
+                              Ray::rays())
                          .flatten()
                          .collect()))
         );
 
-*/
+
+
+
+
+
 
     pub const A: Epos = Epos(1);
     pub const H: Epos = Epos(8);
@@ -321,24 +343,16 @@ fn main() {
 
     let a: [u8; 3] = [1, 2, 3];
 
-    let b: [u8; 3] = a.map(|x| x + 2);
+    asd(&Foo(a), |x| x);
 
-    let c: [u8; 3] = a.map(|x| x + 2);
-
-    map(&b);
-
-
-    map(&b);
 }
 
-fn map(a: &[u8; 3]) -> [u8; 3] {
-    take_ownership(a.map(|x| x + 2));
-    take_ownership(a)
+struct Foo([u8; 3]);
+
+fn asd<F>(a: &Foo, fna: F) -> Foo where F: Fn(u8) -> u8 {
+    Foo(a.0.map(fna))
 }
 
-fn take_ownership(a: [u8; 3])-> [u8; 3] {
-    a
-}
 
 #[cfg(test)]
 mod test {
