@@ -2,13 +2,14 @@
 
 mod sazan {
 
+    use std::ops::Add;
     use std::ops::Index;
     use std::vec::Vec;
 
     use once_cell::sync::Lazy;
 
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Copy, Clone)]
     pub enum Upos {
         A,
         B,
@@ -23,19 +24,19 @@ mod sazan {
     type File = Upos;
     type Rank = Upos;
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Copy, Clone)]
     pub struct Pos {
         file: File,
         rank: Rank
     }
 
-    struct Ray<'a> {
+    struct Ray {
         orig: Pos,
         dest: Pos,
-        between: &'a[Pos]
+        between: Vec<Pos>
     }
 
-
+    #[derive(Copy, Clone)]
     enum Idir {
         STILL,
         UP,
@@ -43,6 +44,8 @@ mod sazan {
         UP2,
         DOWN2
     }
+
+    #[derive(Copy, Clone)]
     struct Dir(Idir, Idir);
 
     type Projection = u8;
@@ -114,11 +117,36 @@ mod sazan {
     }
 
 
-    impl<'a> Ray<'a> {
-        pub fn rays(pos: &Pos, dir: &Dir, projection: &Projection)-> Vec<Ray<'a>> {
-            let res = Vec::new();
+    impl Ray {
+        pub fn new(pos: Pos, dir: Dir, projection: Projection)-> Option<Ray> {
+            let orig = pos;
 
-            res
+            let between = Vec::new();
+
+            let mut next = pos;
+            for _ in 1..projection {
+                if let Some(_next) = next + dir {
+                    next = _next
+                } else {
+                    return None
+                }
+            }
+
+            (pos + dir).map(|dest|
+                             Ray {
+                                 orig,
+                                 dest,
+                                 between
+                             }
+            )
+        }
+    }
+
+    impl Add<Dir> for Pos {
+        type Output = Option<Pos>;
+
+        fn add(self, dir: Dir) -> Option<Pos> {
+            None
         }
     }
 
@@ -143,7 +171,7 @@ mod sazan {
 
     const RAYS: Lazy<SlidingRoleMap<PosMap<Vec<Ray>>>> = Lazy::new(|| {
 
-        let KING_DIR: Vec<Dir> = 
+        let king_dir: Vec<Dir> = 
             vec!(
                 Dir(Idir::UP, Idir::STILL),
                 Dir(Idir::UP, Idir::UP),
@@ -155,30 +183,29 @@ mod sazan {
                 Dir(Idir::STILL, Idir::DOWN),
                 );
 
-        let SHORT_PROJECTION: Vec<Projection> = vec!(1);
+        let short_projection: Vec<Projection> = vec!(1);
 
-        let LONG_PROJECTION: Vec<Projection> = 
+        let long_projection: Vec<Projection> = 
             vec!(1, 2, 3, 4, 5, 6, 7);
 
 
 
-        let DIRS: SlidingRoleMap<(&Vec<Dir>, &Vec<Projection>)> = 
+        let dirs: SlidingRoleMap<(&Vec<Dir>, &Vec<Projection>)> = 
             ALL_SLIDING.map(|role| match role {
-                _ => (&KING_DIR, &SHORT_PROJECTION)
+                _ => (&king_dir, &short_projection)
             });
 
 
-        DIRS.map(|dirs| 
+        dirs.map(|dirs| 
                  ALL_POS
                  .map(|pos|
                       dirs.0
                       .iter()
-                      .flat_map(|dir|
-
+                      .flat_map(|&dir|
                                dirs.1
                                .iter()
-                               .flat_map(|projection|
-                                    Ray::rays(&pos, dir, projection)
+                               .flat_map(move |&projection|
+                                    Ray::new(pos, dir, projection)
                                    )
                                 )
                       .collect()
