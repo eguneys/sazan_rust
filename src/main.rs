@@ -1,5 +1,5 @@
 use std::ops::Add;
-use std::ops::Index;
+use std::ops::{ Index, IndexMut };
 use std::vec::Vec;
 
 use once_cell::sync::Lazy;
@@ -28,8 +28,7 @@ struct Pos {
 
 #[derive(Debug)]
 struct Ray {
-    orig: Pos,
-    dest: Pos,
+    orig: HasOrigDest,
     between: Vec<Pos>
 }
 
@@ -47,6 +46,7 @@ struct Dir(Idir, Idir);
 
 type Projection = u8;
 
+#[derive(Copy, Clone)]
 enum Role {
     King,
     Queen,
@@ -56,6 +56,7 @@ enum Role {
     Pawn
 }
 
+#[derive(Copy, Clone)]
 enum SlidingRole {
     King,
     Queen,
@@ -103,6 +104,112 @@ enum Mobility {
 
 type PosMap<A> = [A; 64];
 type SlidingRoleMap<A> = [A; 5];
+type ColorMap<A> = [A; 2];
+
+#[derive(Copy, Clone)]
+enum Color {
+    White,
+    Black
+}
+
+#[derive(Copy, Clone)]
+struct Piece {
+    color: Color,
+    role: Role
+}
+
+struct Board(PosMap<Option<Piece>>);
+
+impl Role {
+    fn to_sliding(self) -> Option<SlidingRole> {
+        match self {
+            Role::King => Some(SlidingRole::King),
+            Role::Queen => Some(SlidingRole::Queen),
+            Role::Knight => Some(SlidingRole::Knight),
+            Role::Bishop => Some(SlidingRole::Bishop),
+            Role::Rook => Some(SlidingRole::Bishop),
+            _ => None
+        }
+    }
+}
+
+impl Board {
+    fn empty() -> Board {
+        Board([None; 64])
+    }
+
+    fn drop(mut self, pos: Pos, piece: Piece) {
+        self.0[pos] = Some(piece)
+    }
+
+    fn pickup(mut self, pos: Pos) {
+        self.0[pos] = None
+    }
+
+    fn pos(&self, pos: Pos) -> Option<Piece> {
+        self.0[pos]
+    }
+
+
+    fn pawn_push(&self, pos: Pos, color: Color) -> Vec<Mobility> {
+        PAWN_PUSH_RAYS[color][pos]
+            .iter()
+            .map(|ray| {
+
+                let orig = ray.orig;
+
+                let mut blocks: Vec<Pos> = ray.between
+                    .iter()
+                    .copied()
+                    .filter(|&bpos|
+                            self.pos(bpos).is_some()
+                           )
+                    .collect();
+
+                    let promote = None;
+
+                    if (self.pos(ray.orig.1).is_some()) {
+                        blocks.push(ray.orig.1)
+                    }
+
+                    Mobility::PawnPush {
+                        orig,
+                        blocks,
+                        promote
+                    }
+        }).collect()
+    }
+
+
+    fn sliding(&self, pos: Pos, role: SlidingRole) -> Vec<Mobility> {
+            RAYS[role][pos]
+                .iter()
+                .map(|ray| {
+
+                    let orig = ray.orig;
+
+                    let blocks = ray.between
+                        .iter()
+                        .copied()
+                        .filter(|&bpos|
+                                self.pos(bpos).is_some())
+                        .collect();
+
+                    let capture = self.pos(ray.orig.1).map(|_| ray.orig.1);
+
+
+                    Mobility::Slide {
+                        role,
+                        orig,
+                        blocks,
+                        capture
+                    }
+                }).collect()
+    }
+
+
+}
+
 
 impl Pos {
     pub fn new(file: File, rank: Rank) -> Pos {
@@ -132,8 +239,7 @@ impl Ray {
 
         (next + dir).map(|dest|
                         Ray {
-                            orig,
-                            dest,
+                            orig: (orig, dest),
                             between
                         }
                        )
@@ -205,6 +311,23 @@ impl Add<Idir> for Upos {
 }
 
 
+impl<A> IndexMut<Pos> for PosMap<A> {
+    fn index_mut(&mut self, pos: Pos) -> &mut Self::Output {
+        &mut self[pos.file as usize * 8 + pos.rank as usize]
+    }
+}
+
+
+impl<A> Index<Color> for ColorMap<A> {
+    type Output = A;
+
+    fn index(&self, color: Color) -> &Self::Output {
+        &self[color as usize]
+    }
+}
+
+
+
 impl<A> Index<Pos> for PosMap<A> {
     type Output = A;
 
@@ -221,6 +344,46 @@ impl<A> Index<SlidingRole> for SlidingRoleMap<A> {
         &self[role as usize]
     }
 }
+
+const ALL_COLORS: ColorMap<Color> = [
+    Color::White,
+    Color::Black
+];
+
+const PAWN_PUSH_RAYS: Lazy<ColorMap<PosMap<Vec<Ray>>>> = Lazy::new(|| {
+
+    
+    let one_projection: Vec<Projection> = vec!(1);
+
+    let two_projection: Vec<Projection> = vec!(1, 2);
+
+    let dirs: ColorMap<(Dir, Rank)> = ALL_COLORS
+        .map(|color|
+             match color {
+                 Color::White => (Dir(Idir::STILL, Idir::UP), Upos::B),
+                 Color::Black => (Dir(Idir::STILL, Idir::DOWN), Upos::G)
+             });
+
+    dirs
+    .map(|(dir, rank)|
+         ALL_POS
+         .map(|pos| {
+              let projection = if pos.rank == rank {
+                  &two_projection
+              } else {
+                  &one_projection
+              };
+
+              projection
+                  .iter()
+                  .flat_map(|&projection|
+                       Ray::new(pos, dir, projection)
+                      )
+                  .collect()
+         })
+         )
+
+});
 
 
 const RAYS: Lazy<SlidingRoleMap<PosMap<Vec<Ray>>>> = Lazy::new(|| {
@@ -370,6 +533,7 @@ const H8: Pos = Pos{file: Upos::H, rank: Upos::H };
 
 fn main() {
     println!("Hello, world!");
+    drop(RAYS);
 }
 
 
